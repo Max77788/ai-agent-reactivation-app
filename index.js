@@ -1,11 +1,7 @@
-import express from "express";
-import axios from "axios";
-import qs from "qs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require("express");
+const axios = require("axios");
+const qs = require("qs");
+const path = require("path");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -52,11 +48,10 @@ app.get("/oauth/callback", async (req, res) => {
     );
 
     const tokenData = tokenResponse.data;
-    const { access_token, refresh_token, expires_in } = tokenData;
 
-    // 2) Create n8n credential of type `highlevelApi`
     const credentialName = `HighLevel – User ${state || "unknown"}`;
 
+    // 2) Create n8n credential of type `highlevelApi`
     const credentialBody = {
       name: credentialName,
       type: "highlevelApi",
@@ -84,7 +79,7 @@ app.get("/oauth/callback", async (req, res) => {
     const createdCredential = n8nResponse.data;
     const credentialId = createdCredential.id;
 
-    // 3) Notify n8n workflow via webhook BEFORE redirect
+    // 3) Notify n8n via webhook
     try {
       await axios.post(
         "https://kimcdang.app.n8n.cloud/webhook/on-ghl-connected",
@@ -104,8 +99,7 @@ app.get("/oauth/callback", async (req, res) => {
         "Failed to notify n8n webhook:",
         webhookError.response?.data || webhookError.message
       );
-      // Decide if you want to fail here or still continue to redirect.
-      // For now we just log and continue.
+      // Decide if you want to fail here or just log.
     }
 
     // 4) Redirect user to success page
@@ -125,3 +119,6 @@ app.get("/oauth/callback", async (req, res) => {
 app.listen(port, () => {
   console.log(`App listening on port ${port}`);
 });
+
+// If you’re using @vercel/node and want to export the app instead of listen():
+// module.exports = app;
