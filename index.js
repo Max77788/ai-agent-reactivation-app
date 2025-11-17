@@ -30,6 +30,8 @@ app.get("/oauth/callback", async (req, res) => {
       return res.status(400).json({ error: "Missing code parameter" });
     }
 
+    console.log(`Code: ${code}`);
+
     // 1) Exchange code for tokens with HighLevel
     const tokenResponse = await axios.post(
       TOKEN_ENDPOINT,
@@ -84,9 +86,9 @@ app.get("/oauth/callback", async (req, res) => {
       await axios.post(
         "https://kimcdang.app.n8n.cloud/webhook/on-ghl-connected",
         {
-          credentialId,
+          ghlCredentialId: credentialId,
           clientId: CLIENT_ID,
-          credentialName,
+          ghlCredentialName: credentialName,
         },
         {
           headers: {
