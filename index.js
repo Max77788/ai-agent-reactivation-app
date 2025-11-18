@@ -13,8 +13,8 @@ const {
   TOKEN_ENDPOINT,
   N8N_URL,
   N8N_API_KEY,
-  GHL_AUTH_URL, // e.g. https://marketplace.gohighlevel.com/oauth/chooselocation
-  GHL_SCOPE, // e.g. api
+  GHL_AUTH_URL, // must be one of the enum values in the schema
+  GHL_SCOPE, // e.g. "api" or the full HighLevel scopes string
 } = process.env;
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -25,7 +25,7 @@ app.get("/healthz", (req, res) => {
 
 app.get("/oauth/callback", async (req, res) => {
   try {
-    const { code, state, n8nClientId, businessName } = req.query;
+    const { code, state } = req.query;
 
     if (!code) {
       return res.status(400).json({ error: "Missing code parameter" });
@@ -53,36 +53,35 @@ app.get("/oauth/callback", async (req, res) => {
     const tokenData = tokenResponse.data;
     console.log("Received token data from GHL:", tokenData);
 
-    const credentialName = `HighLevel – User ${n8nClientId || businessName || "unknown"}`;
+    const credentialName = `HighLevel – User ${state || "unknown"}`;
 
-    // 2) Create n8n credential of type `highlevelOAuth2Api`
+    // 2) Create n8n credential of type `highLevelOAuth2Api`
     //
-    // According to your schema:
-    // - REQUIRED: authUrl, scope
-    // - OPTIONAL: oauthTokenData, notice
-    // - serverUrl, clientId, clientSecret, sendAdditionalBodyProperties,
-    //   additionalBodyProperties must NOT be present in the "else" branches.
+    // IMPORTANT: match the schema exactly:
+    // - DO send:  authUrl, scope, oauthTokenData
+    // - DO NOT send: useDynamicClientRegistration, grantType,
+    //                serverUrl, clientId, clientSecret,
+    //                sendAdditionalBodyProperties, additionalBodyProperties
     //
-    // So we only send: authUrl, scope, oauthTokenData
+    // authUrl must be one of the enum values in the schema.
+    const authUrl =
+      GHL_AUTH_URL ||
+      "https://marketplace.gohighlevel.com/oauth/chooselocation";
+
+    const scope =
+      GHL_SCOPE ||
+      tokenData.scope || // you can reuse GHL's scope string if you like
+      "api";
+
     const credentialBody = {
       name: credentialName,
       type: "highLevelOAuth2Api",
       data: {
-        authUrl:
-          GHL_AUTH_URL ||
-          "https://marketplace.gohighlevel.com/oauth/chooselocation",
-
-        scope: GHL_SCOPE || "api",
-
-        // REQUIRED TO STOP SCHEMA FROM DEMANDING OTHER FIELDS
-        useDynamicClientRegistration: false,
-        grantType: "authorizationCode",
-
-        // OAuth tokens
+        authUrl,
+        scope,
         oauthTokenData: tokenData,
       },
     };
-
 
     console.log("Creating n8n credential with body:", credentialBody);
 
@@ -109,7 +108,7 @@ app.get("/oauth/callback", async (req, res) => {
         "https://kimcdang.app.n8n.cloud/webhook/on-ghl-connected",
         {
           ghlCredentialId: credentialId,
-          clientId: n8nClientId,
+          clientId: CLIENT_ID,
           ghlCredentialName: credentialName,
         },
         {
@@ -124,7 +123,7 @@ app.get("/oauth/callback", async (req, res) => {
         "Failed to notify n8n webhook:",
         webhookError.response?.data || webhookError.message
       );
-      // You can decide whether to fail hard here or just log.
+      // You can choose whether to treat this as fatal or not.
     }
 
     // 4) Redirect user to success page
