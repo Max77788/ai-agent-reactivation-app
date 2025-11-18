@@ -26,11 +26,29 @@ app.get("/healthz", (req, res) => {
 
 app.get("/oauth/callback", async (req, res) => {
   try {
-    const { code, state, n8nClientId, businessName } = req.query;
+    const { code, state } = req.query;
 
     if (!code) {
       return res.status(400).json({ error: "Missing code parameter" });
     }
+
+    const rawState = req.query.state;
+    let extra = {};
+
+    if (rawState) {
+      try {
+        extra = JSON.parse(decodeURIComponent(rawState));
+      } catch (e) {
+        console.error("Failed to parse state:", e);
+      }
+    }
+
+    console.log("n8nClientId:", extra.n8nClientId);
+    console.log("businessName:", extra.businessName);
+
+    const n8nClientId = extra.n8nClientId;
+    const businessName = extra.businessName;
+
 
     console.log(`Code: ${code}`);
 
