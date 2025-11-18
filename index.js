@@ -14,7 +14,8 @@ const {
   N8N_URL,
   N8N_API_KEY,
   GHL_AUTH_URL, // must be one of the enum values in the schema
-  GHL_SCOPE, // e.g. "api" or the full HighLevel scopes string
+  GHL_SCOPE, // e.g. "api" or the full scopes string
+  GHL_SERVER_URL, // optional override for serverUrl
 } = process.env;
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -57,21 +58,28 @@ app.get("/oauth/callback", async (req, res) => {
 
     // 2) Create n8n credential of type `highLevelOAuth2Api`
     //
-    // IMPORTANT: match the schema exactly:
-    // - DO send:  authUrl, scope, oauthTokenData
-    // - DO NOT send: useDynamicClientRegistration, grantType,
-    //                serverUrl, clientId, clientSecret,
-    //                sendAdditionalBodyProperties, additionalBodyProperties
+    // Schema + error message effectively require:
+    //   authUrl
+    //   scope
+    //   serverUrl
+    //   clientId
+    //   clientSecret
+    //   sendAdditionalBodyProperties
+    //   additionalBodyProperties
+    // Optional but useful:
+    //   oauthTokenData
     //
-    // authUrl must be one of the enum values in the schema.
+    // IMPORTANT: DO NOT send useDynamicClientRegistration or grantType here.
     const authUrl =
       GHL_AUTH_URL ||
       "https://marketplace.gohighlevel.com/oauth/chooselocation";
 
     const scope =
       GHL_SCOPE ||
-      tokenData.scope || // you can reuse GHL's scope string if you like
+      tokenData.scope || // or reuse the real scope from GHL
       "api";
+
+    const serverUrl = GHL_SERVER_URL || "https://services.leadconnectorhq.com";
 
     const credentialBody = {
       name: credentialName,
@@ -79,6 +87,19 @@ app.get("/oauth/callback", async (req, res) => {
       data: {
         authUrl,
         scope,
+
+        // required because n8n internally has
+        // useDynamicClientRegistration = true
+        serverUrl,
+        clientId: CLIENT_ID,
+        clientSecret: CLIENT_SECRET,
+
+        // required because n8n internally has
+        // grantType = "clientCredentials"
+        sendAdditionalBodyProperties: false,
+        additionalBodyProperties: {},
+
+        // store the actual tokens from GHL
         oauthTokenData: tokenData,
       },
     };
@@ -123,7 +144,7 @@ app.get("/oauth/callback", async (req, res) => {
         "Failed to notify n8n webhook:",
         webhookError.response?.data || webhookError.message
       );
-      // You can choose whether to treat this as fatal or not.
+      // Up to you if this is fatal.
     }
 
     // 4) Redirect user to success page
