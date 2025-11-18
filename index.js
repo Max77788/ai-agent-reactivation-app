@@ -25,7 +25,7 @@ app.get("/healthz", (req, res) => {
 
 app.get("/oauth/callback", async (req, res) => {
   try {
-    const { code, state } = req.query;
+    const { code, state, n8nClientId, businessName } = req.query;
 
     if (!code) {
       return res.status(400).json({ error: "Missing code parameter" });
@@ -53,7 +53,7 @@ app.get("/oauth/callback", async (req, res) => {
     const tokenData = tokenResponse.data;
     console.log("Received token data from GHL:", tokenData);
 
-    const credentialName = `HighLevel – User ${state || "unknown"}`;
+    const credentialName = `HighLevel – User ${n8nClientId || businessName || "unknown"}`;
 
     // 2) Create n8n credential of type `highlevelOAuth2Api`
     //
@@ -66,7 +66,7 @@ app.get("/oauth/callback", async (req, res) => {
     // So we only send: authUrl, scope, oauthTokenData
     const credentialBody = {
       name: credentialName,
-      type: "highlevelOAuth2Api",
+      type: "highLevelOAuth2Api",
       data: {
         authUrl:
           GHL_AUTH_URL ||
@@ -101,7 +101,7 @@ app.get("/oauth/callback", async (req, res) => {
         "https://kimcdang.app.n8n.cloud/webhook/on-ghl-connected",
         {
           ghlCredentialId: credentialId,
-          clientId: CLIENT_ID,
+          clientId: n8nClientId,
           ghlCredentialName: credentialName,
         },
         {
