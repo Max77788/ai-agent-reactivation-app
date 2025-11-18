@@ -71,10 +71,18 @@ app.get("/oauth/callback", async (req, res) => {
         authUrl:
           GHL_AUTH_URL ||
           "https://marketplace.gohighlevel.com/oauth/chooselocation",
+
         scope: GHL_SCOPE || "api",
+
+        // REQUIRED TO STOP SCHEMA FROM DEMANDING OTHER FIELDS
+        useDynamicClientRegistration: false,
+        grantType: "authorizationCode",
+
+        // OAuth tokens
         oauthTokenData: tokenData,
       },
     };
+
 
     console.log("Creating n8n credential with body:", credentialBody);
 
