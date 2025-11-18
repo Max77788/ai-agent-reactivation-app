@@ -26,6 +26,7 @@ app.get("/healthz", (req, res) => {
 app.get("/oauth/callback", async (req, res) => {
   try {
     const { code, state } = req.query;
+
     if (!code) {
       return res.status(400).json({ error: "Missing code parameter" });
     }
@@ -50,13 +51,22 @@ app.get("/oauth/callback", async (req, res) => {
     );
 
     const tokenData = tokenResponse.data;
+    console.log("Received token data from GHL:", tokenData);
 
     const credentialName = `HighLevel – User ${state || "unknown"}`;
 
-    // 2) Create n8n credential of type `highlevelApi`
+    // 2) Create n8n credential of type `highlevelOAuth2Api`
+    //
+    // According to your schema:
+    // - REQUIRED: authUrl, scope
+    // - OPTIONAL: oauthTokenData, notice
+    // - serverUrl, clientId, clientSecret, sendAdditionalBodyProperties,
+    //   additionalBodyProperties must NOT be present in the "else" branches.
+    //
+    // So we only send: authUrl, scope, oauthTokenData
     const credentialBody = {
       name: credentialName,
-      type: "highlevelApi",
+      type: "highlevelOAuth2Api",
       data: {
         authUrl:
           GHL_AUTH_URL ||
@@ -65,6 +75,8 @@ app.get("/oauth/callback", async (req, res) => {
         oauthTokenData: tokenData,
       },
     };
+
+    console.log("Creating n8n credential with body:", credentialBody);
 
     const n8nResponse = await axios.post(
       `${N8N_URL}/api/v1/credentials`,
@@ -81,6 +93,8 @@ app.get("/oauth/callback", async (req, res) => {
     const createdCredential = n8nResponse.data;
     const credentialId = createdCredential.id;
 
+    console.log("Created n8n credential:", createdCredential);
+
     // 3) Notify n8n via webhook
     try {
       await axios.post(
@@ -96,12 +110,13 @@ app.get("/oauth/callback", async (req, res) => {
           },
         }
       );
+      console.log("Successfully notified n8n webhook");
     } catch (webhookError) {
       console.error(
         "Failed to notify n8n webhook:",
         webhookError.response?.data || webhookError.message
       );
-      // Decide if you want to fail here or just log.
+      // You can decide whether to fail hard here or just log.
     }
 
     // 4) Redirect user to success page
