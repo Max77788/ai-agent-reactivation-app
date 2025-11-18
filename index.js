@@ -26,7 +26,7 @@ app.get("/healthz", (req, res) => {
 
 app.get("/oauth/callback", async (req, res) => {
   try {
-    const { code, state } = req.query;
+    const { code, state, n8nClientId, businessName } = req.query;
 
     if (!code) {
       return res.status(400).json({ error: "Missing code parameter" });
@@ -54,58 +54,45 @@ app.get("/oauth/callback", async (req, res) => {
     const tokenData = tokenResponse.data;
     console.log("Received token data from GHL:", tokenData);
 
-    const credentialName = `HighLevel – User ${state || "unknown"}`;
+    const credentialName = `HighLevel – User ${businessName || n8nClientId || "Unknown"}`;
 
-    // 2) Create n8n credential of type `highLevelOAuth2Api`
-    //
-    // Schema + error message effectively require:
-    //   authUrl
-    //   scope
-    //   serverUrl
-    //   clientId
-    //   clientSecret
-    //   sendAdditionalBodyProperties
-    //   additionalBodyProperties
-    // Optional but useful:
-    //   oauthTokenData
-    //
-    // IMPORTANT: DO NOT send useDynamicClientRegistration or grantType here.
+    // 2) Prepare required fields from schema
     const authUrl =
       GHL_AUTH_URL ||
       "https://marketplace.gohighlevel.com/oauth/chooselocation";
 
-    const scope =
-      GHL_SCOPE ||
-      tokenData.scope || // or reuse the real scope from GHL
-      "api";
+    const scope = GHL_SCOPE || tokenData.scope || "api";
 
     const serverUrl = GHL_SERVER_URL || "https://services.leadconnectorhq.com";
 
+    // 3) Final schema-compliant credential body
     const credentialBody = {
       name: credentialName,
       type: "highLevelOAuth2Api",
       data: {
+        // REQUIRED by schema (top-level "required")
         authUrl,
         scope,
 
-        // required because n8n internally has
+        // REQUIRED because internal n8n values force:
         // useDynamicClientRegistration = true
         serverUrl,
         clientId: CLIENT_ID,
         clientSecret: CLIENT_SECRET,
 
-        // required because n8n internally has
+        // REQUIRED because internal n8n values force:
         // grantType = "clientCredentials"
         sendAdditionalBodyProperties: false,
         additionalBodyProperties: {},
 
-        // store the actual tokens from GHL
+        // OPTIONAL but needed to store real tokens
         oauthTokenData: tokenData,
       },
     };
 
     console.log("Creating n8n credential with body:", credentialBody);
 
+    // 4) Create credential in n8n
     const n8nResponse = await axios.post(
       `${N8N_URL}/api/v1/credentials`,
       credentialBody,
@@ -123,13 +110,13 @@ app.get("/oauth/callback", async (req, res) => {
 
     console.log("Created n8n credential:", createdCredential);
 
-    // 3) Notify n8n via webhook
+    // 5) Notify your workflow via webhook
     try {
       await axios.post(
         "https://kimcdang.app.n8n.cloud/webhook/on-ghl-connected",
         {
           ghlCredentialId: credentialId,
-          clientId: CLIENT_ID,
+          clientId: n8nClientId,
           ghlCredentialName: credentialName,
         },
         {
@@ -144,10 +131,9 @@ app.get("/oauth/callback", async (req, res) => {
         "Failed to notify n8n webhook:",
         webhookError.response?.data || webhookError.message
       );
-      // Up to you if this is fatal.
     }
 
-    // 4) Redirect user to success page
+    // 6) Redirect user to success page
     return res.redirect("/success.html");
   } catch (error) {
     console.error(
@@ -165,5 +151,5 @@ app.listen(port, () => {
   console.log(`App listening on port ${port}`);
 });
 
-// If you’re using @vercel/node and want to export the app instead of listen():
+// For Vercel:
 // module.exports = app;
